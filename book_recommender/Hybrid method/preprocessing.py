@@ -1,16 +1,8 @@
-"""
-preprocessing.py — Prétraitement partagé entre le module BERT et le module GNN.
-
-Produit un DataFrame unifié avec :
-  - user_id, title, rating, description, authors, categories
-  - user_id_idx, item_id_idx  (indices continus pour PyG)
-Et exporte les LabelEncoders + catalogue livres ordonné.
-"""
-
 import os
 import numpy as np
 import pandas as pd
 import sklearn.preprocessing as pp
+from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 
 from config import (
@@ -20,16 +12,12 @@ from config import (
     TEST_SIZE, RANDOM_STATE, SAMPLE_SIZE, CACHE_DIR
 )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Chargement & fusion
-# ─────────────────────────────────────────────────────────────────────────────
-
 def load_raw() -> pd.DataFrame:
     print("Chargement des fichiers CSV...")
     ratings = pd.read_csv(RATINGS_FILE, on_bad_lines="skip", low_memory=False)
     books   = pd.read_csv(BOOKS_FILE,   on_bad_lines="skip", low_memory=False)
 
+    # renommage des colonnes
     ratings = ratings.rename(columns={
         "User_id":      "user_id",
         "Title":        "title",
@@ -62,7 +50,7 @@ def load_raw() -> pd.DataFrame:
     )
     df = df[ascii_ratio > 0.8]
 
-    # Filtre min interactions
+    # Filtre des interactions users/livres
     user_counts = df["user_id"].value_counts()
     df = df[df["user_id"].isin(
         user_counts[user_counts >= MIN_USER_INTERACTIONS].index
@@ -75,15 +63,8 @@ def load_raw() -> pd.DataFrame:
     print(f"  Après jointure + nettoyage + filtrage : {len(df):,} interactions")
     return df.reset_index(drop=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Point d'entrée principal
-# ─────────────────────────────────────────────────────────────────────────────
 
 def load_and_preprocess(use_cache: bool = True) -> pd.DataFrame:
-    """
-    Charge, fusionne, filtre et retourne le DataFrame complet.
-    Utilise un cache parquet pour éviter de recharger les CSV à chaque fois.
-    """
     os.makedirs(CACHE_DIR, exist_ok=True)
 
     if use_cache and os.path.exists(CACHE_FILE):
@@ -101,16 +82,7 @@ def load_and_preprocess(use_cache: bool = True) -> pd.DataFrame:
     print(f"  Cache sauvegardé → {CACHE_FILE}")
     return df
 
-
 def split_and_encode(df: pd.DataFrame) -> tuple:
-    """
-    Split train/test + LabelEncoders.
-    Sauvegarde book_titles_ordered.npy pour que le module BERT
-    puisse encoder les descriptions dans le bon ordre.
-
-    Retourne : (train_df, test_df, le_user, le_book, n_users, n_items)
-    """
-    # Sous-échantillonnage optionnel (comme dans le code collègue)
     books_unique = df["title"].unique()
     if SAMPLE_SIZE and len(books_unique) > SAMPLE_SIZE:
         sampled_titles = pd.Series(books_unique).sample(
@@ -149,3 +121,29 @@ def split_and_encode(df: pd.DataFrame) -> tuple:
     print(f"Users : {n_users:,} | Livres : {n_items:,}")
 
     return train_df, test_df, le_user, le_book, n_users, n_items
+
+
+def plot_popularity_bias(df: pd.DataFrame, top_n=20, save_dir: str = CACHE_DIR):
+    book_pop = df['title'].value_counts()
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+    axes[0].plot(range(len(book_pop)), book_pop.values)
+    axes[0].set_title('Longue traîne — ratings par livre')
+    axes[0].set_xlabel('Livre (trié par popularité)')
+    axes[0].set_ylabel('Nombre de ratings')
+
+    axes[1].barh(range(top_n), book_pop.head(top_n).values)
+    axes[1].set_yticks(range(top_n))
+    axes[1].set_yticklabels([t[:35] for t in book_pop.head(top_n).index], fontsize=7)
+    axes[1].set_title(f'Top {top_n} livres les plus populaires')
+    axes[1].invert_yaxis()
+
+    plt.tight_layout()
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        out = os.path.join(save_dir, "popularity_bias.png")
+        plt.savefig(out, dpi=150)
+        plt.close()
+        print(f"Graphes de popularité sauvegardés → {out}")
+    else:
+        plt.show()

@@ -1,4 +1,7 @@
 import argparse
+import io
+import sys
+
 from config import *
 from preprocessing import *
 from bert_encoder import *
@@ -24,12 +27,15 @@ def run_pipeline(args):
     device = get_device()
     os.makedirs(CACHE_DIR, exist_ok=True)
 
-    # 1. Preprocessing partage  ─────────────────────────────────────────────────────────
+    # 1. Preprocessing partage
     print("\n" + "=" * 60)
     print("ÉTAPE 1 — Prétraitement")
     print("=" * 60)
     df = load_and_preprocess(use_cache=not args.no_cache)
     train_df, test_df, le_user, le_book, n_users, n_items = split_and_encode(df)
+
+    # Analyse du biais de popularité
+    plot_popularity_bias(df, save_dir=CACHE_DIR)
 
     desc_lookup = (
         df.drop_duplicates(subset=["title"])
@@ -37,7 +43,7 @@ def run_pipeline(args):
         .to_dict()
     )
 
-    # 2. Encodage des descriptions avec BERT  ──────────────────────────────────────────────
+    # 2. Encodage des descriptions avec BERT
     print("\n" + "=" * 60)
     print("ÉTAPE 2 — Encodage BERT des descriptions")
     print("=" * 60)
@@ -49,14 +55,14 @@ def run_pipeline(args):
         book_bert_embeddings, dtype=torch.float32
     ).to(device)
 
-    # 3.Graphe biparti  ─────────────────────────────────────────────────────────────────────
+    # 3.Graphe biparti
     print("\n" + "=" * 60)
     print("ÉTAPE 3 — Construction du graphe biparti")
     print("=" * 60)
     train_edge_index = build_edge_index(train_df, n_users, device)
     print(f"Edge index : {train_edge_index.shape}  (2 × 2N arêtes non orientés)")
 
-    # 4. Entrainement du modèle HybridLightGCN  ──────────────────────────────────────────────
+    # 4. Entrainement du modèle HybridLightGCN
     print("\n" + "=" * 60)
     print("ÉTAPE 4 — Modèle HybridLightGCN")
     print("=" * 60)
@@ -94,34 +100,67 @@ def run_pipeline(args):
         print(f"Meilleure Precision@{K}: {best_precision:.4f}")
         plot_training(history)
 
-    # 5. Recommandations  ────────────────────────────────────────────────────────────────────
+    # 5. Recommandations
+    report_path = os.path.join(CACHE_DIR, f"recommendations_report.txt")
+    buffer = io.StringIO()
+    sys.stdout = buffer
+
+    print(f"=== RAPPORT DE RECOMMANDATIONS ===")
+
     print("\n" + "=" * 60)
     print("ÉTAPE 5 — Recommandations")
     print("=" * 60)
 
+    books_catalogue = df.drop_duplicates(subset=["title"]).reset_index(drop=True)
     example_user = args.user or test_df["user_id"].iloc[0]
-    print(f"\n[main] Utilisateur exemple : {example_user}\n")
 
-    for mode in ["gnn", "bert", "hybrid"]:
-        print(f"\n--- Mode : {mode.upper()} ---")
-        recs = recommend(
-            user_raw_id=example_user,
-            model=model,
-            train_edge_index=train_edge_index,
-            train_df=train_df,
-            test_df=test_df,
-            books_df=df.drop_duplicates(subset=["title"]),
-            le_user=le_user,
-            le_book=le_book,
-            book_bert_embeddings=book_bert_embeddings,
-            n_users=n_users,
-            n_items=n_items,
-            device=device,
-            k=10,
-            mode=mode,
-        )
-        print(recs.to_string())
-    # ── 6. Comparaison des méthodes ───────────────────────────────────────────
+
+    print(f"\nUtilisateur : {example_user}\n")
+
+    print("--- Livres lus (TRAIN) ---")
+    print(show_already_read(example_user, train_df, books_catalogue, le_user, le_book, label="train").to_string())
+
+    print("\n--- Livres lus (TEST — vérité terrain) ---")
+    print(show_already_read(example_user, test_df, books_catalogue, le_user, le_book, label="test").to_string())
+
+    print("\n--- Recommandations HybridLightGCN ---")
+    print(recommend_books(
+        user_raw_id=example_user,
+        model=model,
+        train_edge_index=train_edge_index,
+        train_df=train_df,
+        test_df=test_df,
+        books_df=books_catalogue,
+        le_user=le_user,
+        le_book=le_book,
+        n_users=n_users,
+        n_items=n_items,
+        K=10,
+    ).to_string())
+
+    print("\n" + "=" * 60)
+    print("ÉTAPE 6 — Comparaison des 3 méthodes")
+    print("=" * 60)
+    compare_recommendations(
+        user_raw_id=example_user,
+        model=model,
+        train_edge_index=train_edge_index,
+        train_df=train_df,
+        test_df=test_df,
+        books_df=books_catalogue,
+        le_user=le_user,
+        le_book=le_book,
+        book_bert_embeddings=book_bert_embeddings,
+        n_users=n_users,
+        n_items=n_items,
+        K=10,
+    )
+    sys.stdout = sys.__stdout__
+    report_text = buffer.getvalue()
+    print(report_text)
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(report_text)
+    print(f"\nRapport sauvegardé → {report_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

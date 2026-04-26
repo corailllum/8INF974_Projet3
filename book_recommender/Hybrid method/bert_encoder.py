@@ -1,12 +1,3 @@
-"""
-bert_encoder.py — Code de la collègue, conservé tel quel.
-
-Seuls ajouts pour l'intégration dans le pipeline hybride :
-  - imports depuis config.py  (remplace les constantes locales)
-  - fonction run_bert_pipeline()  (colle au main() original mais retourne knn + embeddings)
-  - le main() original est conservé intact en bas du fichier
-"""
-
 import os
 import time
 import random
@@ -175,7 +166,7 @@ def qualitative_test(
     print("\n" + "=" * 70)
 
 
-# Pipeline necessaie au pipeline hybride
+# Pipeline nécessaire pour le pipeline hybride
 def run_bert_pipeline(
     desc_lookup: dict,
     use_cache: bool = True,
@@ -257,7 +248,7 @@ def main() -> None:
           .reset_index(drop=True)
     )
 
-    # 2. Split (sur les livres uniques, comme dans le code original)
+    # 2. Split
     train_books, test_books = train_test_split(
 
         books_df, test_size=0.15, random_state=RANDOM_STATE

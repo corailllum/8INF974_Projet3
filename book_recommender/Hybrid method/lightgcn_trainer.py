@@ -127,7 +127,6 @@ def bpr_loss(
     pos_emb0: torch.Tensor,
     neg_emb0: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """BPR loss + régularisation L2 sur les embeddings initiaux."""
     reg_loss = (1 / 2) * (
         user_emb0.norm().pow(2) +
         pos_emb0.norm().pow(2)  +
@@ -150,14 +149,6 @@ def get_metrics(
         test_lookup: dict,  # précalculé dans train()
         k: int,
 ) -> tuple[float, float]:
-    """
-    Calcule Recall@K et Precision@K.
-
-    Optimisations :
-      - train_mask précalculé (pas de sparse rebuild)
-      - test_lookup précalculé (pas de groupby)
-      - topk entièrement sur GPU, converti en numpy une seule fois
-    """
     # Scores (n_users, n_items) — masquer les interactions train
     relevance = torch.matmul(user_emb, item_emb.T)
     # Masque sparse : on soustrait 1e9 sur les items vus (évite to_dense sur le masque)
@@ -196,21 +187,14 @@ def train_and_eval(
         k: int = K,
         eval_every: int = EVAL_EVERY,
 ) -> dict:
-    """
-    Entraîne HybridLightGCN et retourne l'historique des métriques.
-
-    Retourne un dict :
-      { 'loss', 'bpr_loss', 'reg_loss', 'recall', 'precision' }
-      recall et precision sont à -1 pour les époques sans évaluation.
-    """
-    # ── Précalculs (une seule fois) ───────────────────────────────────────────
-    print("[trainer] Précalcul des structures d'accélération...")
+    # Précalculs (une seule fois)
+    print("Précalcul des structures d'accélération...")
     user_items_dict = build_user_items_dict(train_df)
     all_users       = list(user_items_dict.keys())   # précalculé ici, pas dans chaque batch
     train_mask = build_train_mask(train_df, n_users, n_items, device)
     test_lookup = build_test_lookup(test_df)
     n_batch = max(1, len(train_df) // batch_size)
-    print(f"[trainer] {n_users} users | {n_items} livres | "
+    print(f"{n_users} users | {n_items} livres | "
           f"{n_batch} batches/époque | éval tous les {eval_every} époques")
 
     history = {key: [] for key in ["loss", "bpr_loss", "reg_loss", "recall", "precision"]}
@@ -271,18 +255,15 @@ def plot_training(history: dict, save_dir: str = CACHE_DIR):
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 4))
 
-    # ── Graphe 1 : BPR Loss et Loss totale (même échelle, petites valeurs) ──
     axes[0].plot(epochs, history["bpr_loss"], label="BPR Loss", color="tab:blue")
     axes[0].plot(epochs, history["loss"], label="Loss totale", color="tab:green", linestyle="--")
     axes[0].set(xlabel="Époque", ylabel="Loss", title="BPR Loss — HybridLightGCN")
     axes[0].legend()
 
-    # ── Graphe 2 : Reg Loss séparée (échelle différente) ──────────────────
     axes[1].plot(epochs, history["reg_loss"], label="Reg Loss", color="tab:orange")
     axes[1].set(xlabel="Époque", ylabel="Loss", title="Reg Loss — HybridLightGCN")
     axes[1].legend()
 
-    # ── Graphe 3 : Métriques (uniquement aux époques évaluées) ────────────
     eval_eps = [e for e, r in zip(epochs, history["recall"]) if r >= 0]
     recalls = [r for r in history["recall"] if r >= 0]
     precisions = [p for p in history["precision"] if p >= 0]
@@ -296,5 +277,5 @@ def plot_training(history: dict, save_dir: str = CACHE_DIR):
     out = os.path.join(save_dir, "training_curves.png")
     plt.savefig(out, dpi=150)
     plt.close()
-    print(f"[main] Courbes sauvegardées → {out}")
+    print(f"Courbes sauvegardées → {out}")
 
