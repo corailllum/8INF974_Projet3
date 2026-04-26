@@ -1,10 +1,6 @@
-"""
+ """
 Système de recommandation de livres — BERT + KNN
 Dataset : Goodreads 100k (kaggle.com/datasets/mdhamani/goodreads-books-100k)
-
-Usage :
-    pip install pandas scikit-learn sentence-transformers torch tqdm numpy
-    python book_recommendation.py --csv path/to/books.csv
 """
 
 import argparse
@@ -19,9 +15,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import torch
 
-# ─────────────────────────────────────────────
-# CONFIG
-# ─────────────────────────────────────────────
+#config
 DESCRIPTION_COL = "desc"          # nom de la colonne description dans le CSV
 TITLE_COL       = "title"         # nom de la colonne titre
 GENRE_COL       = "genre"         # nom de la colonne genre dans le CSV
@@ -33,9 +27,7 @@ BATCH_SIZE      = 64              # batch pour l'encodage BERT
 RANDOM_STATE    = 42
 
 
-# ─────────────────────────────────────────────
-# DÉTECTION AUTOMATIQUE DU DEVICE
-# ─────────────────────────────────────────────
+#detection gpu
 def detect_device() -> str:
     """
     Sélectionne automatiquement le meilleur device disponible :
@@ -57,9 +49,7 @@ def detect_device() -> str:
         print(f"   CPU uniquement -> {n_cores} threads")
     return device
 
-# ─────────────────────────────────────────────
-# 1. CHARGEMENT & NETTOYAGE
-# ─────────────────────────────────────────────
+#chargement/nettoyage
 def load_data(csv_path: str) -> pd.DataFrame:
     print("\nChargement du dataset...")
     df = pd.read_csv(csv_path, on_bad_lines="skip", low_memory=False)
@@ -97,9 +87,7 @@ def split_data(df: pd.DataFrame):
     return train_df, test_df
 
 
-# ─────────────────────────────────────────────
-# 3. ENCODAGE BERT — avec suivi par époque/batch
-# ─────────────────────────────────────────────
+#encodage BERT
 def encode_descriptions(model, descriptions: list, split_name: str, device: str) -> np.ndarray:
     """Encode les descriptions par batch avec affichage de la progression."""
     n          = len(descriptions)
@@ -223,9 +211,7 @@ def qualitative_test(
     idx  = random.randint(0, len(test_df) - 1)
     book = test_df.iloc[idx]
 
-    print("\n" + "=" * 70)
     print("TEST QUALITATIF -- livre tire au sort dans le test set")
-    print("=" * 70)
     print(f"\nLIVRE REQUETE (index {idx})")
     print(f"   Titre       : {book[TITLE_COL]}")
     if "author" in book:
@@ -263,9 +249,7 @@ def qualitative_test(
     print("\n" + "=" * 70)
 
 
-# ─────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────
+#Main
 def main():
     parser = argparse.ArgumentParser(
         description="Recommandation de livres — SBERT + KNN"
