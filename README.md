@@ -17,20 +17,17 @@
 
 ### Dossier `book_recommender/`
 - **Bert-KNN method/**
-	- archive/ : (archive de fichiers, contenu non détaillé)
-	- archive.zip : archive compressée
-	- test_reco_simi.py : Script de test pour la méthode BERT+KNN.
+	- Recommentation_Similarite_GoodReads.py : Script de test pour la méthode BERT+KNN.
 - **Hybrid method/**
-	- analysis.ipynb : Notebook principal pour la méthode hybride (LightGCN + BERT).
 	- bert_encoder.py : Encodage des livres avec BERT.
 	- config.py : Fichier de configuration (chemins, hyperparamètres).
 	- lightgcn_trainer.py : Entraînement du modèle LightGCN.
 	- model.py : Définition du modèle hybride LightGCN.
 	- pipeline_hybrid.py : Pipeline complet pour la méthode hybride.
 	- preprocessing.py : Prétraitement des données pour les modèles.
-	- recommender.py : Fusion des scores et recommandations.
+	- recommender.py : Mesure des scores et recommandations.
 - **LightGCN method/**
-	- gnn_for_book_recommender_v4.ipynb : Notebook pour la méthode LightGCN seule.
+	- gnn_for_book_recommender.ipynb : Notebook pour la méthode LightGCN seule.
 - **data/Book Crossing Dataset/**
 	- BX-Book-Ratings.csv, BX-Books.csv, BX-Users.csv : copie locale des fichiers du dataset Book Crossing.
 
@@ -47,8 +44,7 @@ pip install pandas scikit-learn sentence-transformers torch tqdm numpy streamlit
 
 ### 2. Lancer les notebooks
 
-Ouvre les notebooks dans Jupyter ou VS Code :
-- `book_recommender/Hybrid method/analysis.ipynb` (méthode hybride)
+Ouvre le notebook dans Jupyter ou VS Code :
 - `book_recommender/LightGCN method/gnn_for_book_recommender_v4.ipynb` (LightGCN seul)
 
 ### 3. Lancer les dashboards
@@ -63,10 +59,18 @@ streamlit run visufilm.py
 
 Exécuter le script de test :
 ```bash
-python test_reco_simi.py
+python book_recommender/Bert-KNN method/Recommentation_Similarite_GoodReads.py
 ```
 
-### 5. Organisation des données
+### 5. Tester la recommandation Hybride : BERT+ LightGCN
+
+Exécuter le script de test :
+```bash
+python book_recommender/Hybrid method/pipeline_hybrid.py
+```
+
+
+### 6. Organisation des données
 
 Les datasets doivent être placés à la racine ou dans les dossiers indiqués dans les scripts/configs.
 Adapter les chemins dans `config.py` si besoin.

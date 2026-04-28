@@ -23,17 +23,15 @@ def build_edge_index(
     ]).to(device)
     return train_edge_index
 
-# Dataloader
+
 def build_user_items_dict(train_df: pd.DataFrame) -> dict:
     """
     {user_idx: set(item_indices)} précalculé une seule fois.
-    Utilise groupby vectorisé Pandas — bien plus rapide que itertuples sur 200k lignes.
     """
     return {
         int(uid): set(items)
         for uid, items in train_df.groupby("user_id_idx")["item_id_idx"].apply(list).items()
     }
-
 
 def build_train_mask(
         train_df: pd.DataFrame,
@@ -41,18 +39,6 @@ def build_train_mask(
         n_items: int,
         device: torch.device,
 ) -> torch.Tensor:
-    """
-    Masque sparse des interactions train sur GPU.
-
-    FIX UserWarning : .copy() sur les arrays numpy avant de les passer à torch.
-    Les colonnes d'un DataFrame chargé depuis parquet sont souvent non-writables
-    (memory-mapped), ce qui déclenche le warning PyTorch.
-
-    Reste en SPARSE pour éviter l'OOM :
-    ex. 10k users × 20k livres = 800 Mo en float32 dense → risque de crash GPU.
-    Le masque sparse ne stocke que les ~200k valeurs non nulles.
-    """
-    # .copy() → rend le tableau writable, corrige le UserWarning
     rows = torch.LongTensor(train_df["user_id_idx"].values.copy())
     cols = torch.LongTensor(train_df["item_id_idx"].values.copy())
     i = torch.stack([rows, cols])
@@ -65,14 +51,13 @@ def build_train_mask(
 def build_test_lookup(test_df: pd.DataFrame) -> dict:
     """
     {user_idx: set(item_indices)} pour le test.
-    set au lieu de list → intersection O(min(a,b)).
     """
     return {
         int(uid): set(items)
         for uid, items in test_df.groupby("user_id_idx")["item_id_idx"].apply(list).items()
     }
 
-
+# Dataloader
 def data_loader_fast(
         user_items_dict: dict,
         all_users: list,          # précalculé dans train_and_eval, pas recalculé ici
@@ -84,13 +69,12 @@ def data_loader_fast(
     """
     Batch sampling BPR ultra-rapide.
 
-    Optimisations vs version originale :
+    Optimisations pour accélérer l'entrainement :
       - Utilise user_items_dict précalculé (pas de groupby à chaque appel)
-      - all_users précalculé une fois dans train_and_eval (pas de list() ici)
-      - sample_neg utilise un set Python → test d'appartenance O(1)
+      - all_users précalculé une fois dans train_and_eval
+      - sample_neg utilise un set Python
       - Pas de Pandas merge → numpy pur
     """
-    # Tirer les users du batch
     if n_users >= batch_size:
         batch_users = random.sample(all_users, batch_size)
     else:
@@ -100,12 +84,12 @@ def data_loader_fast(
     neg_items = []
 
     for uid in batch_users:
-        seen = user_items_dict[uid]  # set → O(1) pour le test d'appartenance
+        seen = user_items_dict[uid]
 
         # Positif : un item vu au hasard
         pos_items.append(random.choice(list(seen)))
 
-        # Négatif : un item jamais vu (boucle courte grâce au set)
+        # Négatif : un item jamais vu
         neg = random.randint(0, n_items - 1)
         while neg in seen:
             neg = random.randint(0, n_items - 1)
@@ -149,9 +133,9 @@ def get_metrics(
         test_lookup: dict,  # précalculé dans train()
         k: int,
 ) -> tuple[float, float]:
-    # Scores (n_users, n_items) — masquer les interactions train
+    # Scores (n_users, n_items)
     relevance = torch.matmul(user_emb, item_emb.T)
-    # Masque sparse : on soustrait 1e9 sur les items vus (évite to_dense sur le masque)
+    # Masquer les interactions du train
     relevance = relevance - train_mask.to_dense() * 1e9
 
     # Top-K indices (sur GPU)
