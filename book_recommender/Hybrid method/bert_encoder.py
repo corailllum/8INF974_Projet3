@@ -172,6 +172,20 @@ def run_bert_pipeline(
     use_cache: bool = True,
 ) -> tuple:
     os.makedirs(CACHE_DIR, exist_ok=True)
+    """
+    Appelée par pipeline_hybrid.py pour intégrer le module BERT dans le pipeline hybride.
+
+    Différence avec le main() original :
+      - L'encodage se fait dans l'ordre de le_book.classes_ (book_titles_ordered.npy)
+        pour garantir que embeddings[i] <-> le_book.classes_[i] <-> noeud livre i dans PyG.
+      - Retourne (knn, embeddings) au lieu de tout afficher et quitter.
+      - Le cache evite de re-encoder a chaque lancement.
+
+    Parametres
+    ----------
+    desc_lookup : dict  {title -> description}  — fourni par pipeline_hybrid.py apres preprocessing
+    use_cache   : bool  — si True, charge depuis le disque si disponible
+    """
 
     # Ordre des titres = le_book.classes_ sauvegarde par preprocessing.split_and_encode()
     if not os.path.exists(BOOK_TITLES_FILE):

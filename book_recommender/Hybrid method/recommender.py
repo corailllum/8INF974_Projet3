@@ -205,7 +205,6 @@ def compare_recommendations(
     print(summary_df.to_string())
     print("=" * 55)
 
-    # ── Affichage côte à côte ─────────────────────────────────────────────────
     print("\n--- Recommandations par méthode ---\n")
     for method_name, df_recs in results.items():
         print(f"[ {method_name} ]")
